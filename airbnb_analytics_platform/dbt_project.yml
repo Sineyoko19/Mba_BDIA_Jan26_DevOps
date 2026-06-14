@@ -46,10 +46,6 @@ seeds:
         host_since: timestamptz
     reviews:
       +column_types:
-        listing_id: bigint
-        date: timestamptz
-      +meta:
-        duckdb_options:
-          strict_mode: false
-          ignore_errors: true
-      +quote_char: ""
+        listing_id: varchar
+        date: varchar
+      
