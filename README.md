@@ -21,6 +21,14 @@ La Plateforme d'Analyse Airbnb est une solution complète de business intelligen
 - Fournir un tableau de bord interactif pour l'exploration et l'analyse des données
 - Assurer la qualité et la cohérence des données tout au long du processus
 
+## Objectif fonctionnel
+
+L’utilisateur peut :
+- filtrer les annonces Airbnb en temps réel
+- comparer les prix par type de logement
+- analyser les tendances des avis
+- identifier les hôtes les plus performants
+
 ### Architecture générale
 
 Le projet suit une architecture en trois couches:
