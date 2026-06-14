@@ -1,0 +1,74 @@
+version: 2
+
+models:
+
+  - name: gold_listings_analytics
+    description: >
+      Table Gold enrichissant chaque logement avec les statistiques d'avis
+      et les informations de l'hôte associé.
+    columns:
+      - name: listing_id
+        description: Identifiant unique du logement
+        tests:
+          - not_null
+          - unique
+      - name: room_type
+        description: Type de logement (Entire home/apt, Private room, etc.)
+        tests:
+          - not_null
+      - name: price
+        description: Prix par nuit en euros
+        tests:
+          - not_null
+      - name: positive_rate_pct
+        description: Pourcentage d'avis positifs (0-100)
+
+  - name: gold_hosts_performance
+    description: >
+      Vue agrégée par hôte avec nombre de logements, prix moyens
+      et indicateurs de satisfaction client.
+    columns:
+      - name: host_id
+        description: Identifiant unique de l'hôte
+        tests:
+          - not_null
+          - unique
+      - name: is_superhost
+        description: Statut superhost (true/false)
+        tests:
+          - not_null
+      - name: nb_listings
+        description: Nombre de logements actifs de l'hôte
+        tests:
+          - not_null
+
+  - name: gold_reviews_summary
+    description: >
+      Distribution des sentiments des avis par type de logement.
+    columns:
+      - name: room_type
+        description: Type de logement
+        tests:
+          - not_null
+      - name: sentiment
+        description: Sentiment de l'avis (positive, negative, neutral)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['positive', 'negative', 'neutral']
+
+  - name: gold_full_moon_impact
+    description: >
+      Comparaison des sentiments d'avis entre les périodes de pleine lune
+      (±3 jours) et les périodes normales.
+    columns:
+      - name: is_near_full_moon
+        description: TRUE si l'avis est dans une fenêtre de ±3 jours autour d'une pleine lune
+        tests:
+          - not_null
+      - name: sentiment
+        description: Sentiment de l'avis
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['positive', 'negative', 'neutral']
