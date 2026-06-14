@@ -5,7 +5,7 @@ select
     room_type,
     minimum_nights,
     host_id,
-    price,
+    TRY_CAST(price As float) AS price,
     created_at,
     updated_at
 from {{ ref('listings') }}

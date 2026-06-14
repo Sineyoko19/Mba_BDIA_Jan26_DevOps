@@ -11,7 +11,6 @@ SELECT
 
     SUM(CASE WHEN r.sentiment = 'positive' THEN 1 ELSE 0 END) AS positive_reviews,
     SUM(CASE WHEN r.sentiment = 'negative' THEN 1 ELSE 0 END) AS negative_reviews,
-
     ROUND(
         SUM(CASE WHEN r.sentiment = 'positive' THEN 1 ELSE 0 END) * 100.0
         / NULLIF(COUNT(r.reviewer_name), 0),
