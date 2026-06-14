@@ -1,1 +1,5 @@
 logs
+airbnb_analytics_platform/seeds
+__pycache__/
+airbnb_analytics_platform/__pycache__/
+airbnb_analytics_platform/dev.duckdb
