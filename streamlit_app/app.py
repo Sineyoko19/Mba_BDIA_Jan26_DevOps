@@ -9,312 +9,209 @@ from pathlib import Path
 # CONFIG
 # ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="Airbnb Analytics Platform",
+    page_title="Airbnb Market Intelligence",
     page_icon="🏠",
-    layout="wide",
+    layout="wide"
 )
 
 DB_PATH = Path(__file__).parent.parent / "airbnb_analytics_platform" / "dev.duckdb"
 
 @st.cache_resource
-def get_connection():
+def get_conn():
     return duckdb.connect(str(DB_PATH), read_only=True)
 
-def query(sql: str) -> pd.DataFrame:
-    return get_connection().execute(sql).fetchdf()
+def run_query(sql: str) -> pd.DataFrame:
+    conn = get_conn()
+    return conn.execute(sql).fetchdf()
 
 
 # ─────────────────────────────────────────────
-# SIDEBAR
+# SIDEBAR FILTERS
 # ─────────────────────────────────────────────
-st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/6/69/Airbnb_Logo_Bélo.svg", width=140)
-st.sidebar.title("Filtres")
+st.sidebar.image(
+    "https://upload.wikimedia.org/wikipedia/commons/6/69/Airbnb_Logo_Bélo.svg",
+    width=130
+)
 
-room_types = query("SELECT DISTINCT room_type FROM gold_listings ORDER BY 1")["room_type"].tolist()
-selected_rooms = st.sidebar.multiselect("Type de logement", room_types, default=room_types)
+st.sidebar.title("Filters")
 
-price_min, price_max = query("SELECT MIN(price), MAX(price) FROM gold_listings").values[0]
-price_range = st.sidebar.slider("Prix par nuit (€)", float(price_min), float(price_max),
-                                (float(price_min), float(price_max)), step=5.0)
+room_types = run_query("SELECT DISTINCT room_type FROM gold_listings ORDER BY 1")["room_type"].tolist()
+selected_rooms = st.sidebar.multiselect("Room type", room_types, default=room_types)
 
-superhost_filter = st.sidebar.radio("Superhost", ["Tous", "Oui", "Non"])
-superhost_sql = "" if superhost_filter == "Tous" else f"AND is_superhost = {'TRUE' if superhost_filter == 'Oui' else 'FALSE'}"
+price_min, price_max = run_query("SELECT MIN(price), MAX(price) FROM gold_listings").values[0]
+price_range = st.sidebar.slider(
+    "Price range (€)",
+    float(price_min),
+    float(price_max),
+    (float(price_min), float(price_max))
+)
 
-rooms_sql = ", ".join(f"'{r}'" for r in selected_rooms) if selected_rooms else "''"
+superhost_mode = st.sidebar.radio("Superhost filter", ["All", "Yes", "No"])
+superhost_sql = ""
+if superhost_mode == "Yes":
+    superhost_sql = "AND is_superhost = TRUE"
+elif superhost_mode == "No":
+    superhost_sql = "AND is_superhost = FALSE"
+
+rooms_sql = ",".join([f"'{r}'" for r in selected_rooms])
 
 
 # ─────────────────────────────────────────────
 # HEADER
 # ─────────────────────────────────────────────
-st.title("🏠 Airbnb Analytics Platform")
-st.markdown("Tableau de bord analytique")
+st.title("🏠 Airbnb Market Intelligence Dashboard")
+st.caption("Data-driven view of Airbnb supply, hosts and customer satisfaction")
+
 st.divider()
 
 
 # ─────────────────────────────────────────────
-# KPIs
+# KPI SECTION (BUSINESS ORIENTED)
 # ─────────────────────────────────────────────
-kpi = query(f"""
-    SELECT
-        COUNT(*)                        AS nb_listings,
-        ROUND(AVG(price), 2)            AS avg_price,
-        SUM(total_reviews)              AS total_reviews,
-        ROUND(AVG(positive_rate_pct),1) AS avg_positive_rate
-    FROM gold_listings
-    WHERE room_type IN ({rooms_sql})
-      AND price BETWEEN {price_range[0]} AND {price_range[1]}
-      {superhost_sql}
+kpi = run_query(f"""
+SELECT
+    COUNT(DISTINCT listing_id) AS listings,
+    ROUND(AVG(price),2) AS avg_price,
+    SUM(total_reviews) AS reviews,
+    ROUND(AVG(positive_rate_pct),1) AS satisfaction,
+    ROUND(AVG(price / NULLIF(total_reviews,0)),2) AS price_efficiency
+FROM gold_listings
+WHERE room_type IN ({rooms_sql})
+AND price BETWEEN {price_range[0]} AND {price_range[1]}
+{superhost_sql}
 """)
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("🏘️ Logements", f"{int(kpi['nb_listings'][0]):,}")
-c2.metric("💶 Prix moyen / nuit", f"{kpi['avg_price'][0]:.0f} €")
-c3.metric("💬 Avis totaux", f"{int(kpi['total_reviews'][0]):,}")
-c4.metric("😊 Taux positif moyen", f"{kpi['avg_positive_rate'][0]:.1f} %")
+c1, c2, c3, c4, c5 = st.columns(5)
+
+c1.metric("Listings", int(kpi["listings"][0]))
+c2.metric("Avg price (€)", f"{kpi['avg_price'][0]:.0f}")
+c3.metric("Reviews", int(kpi["reviews"][0]))
+c4.metric("Satisfaction (%)", f"{kpi['satisfaction'][0]:.1f}")
+c5.metric("Price efficiency", f"{kpi['price_efficiency'][0]:.2f}")
 
 st.divider()
 
 
 # ─────────────────────────────────────────────
-# ONGLETS
+# TABS
 # ─────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs([
-    "🏘️ Logements", "👤 Hôtes", "💬 Avis clients", "🌕 Pleine lune"
+    "Market", "Hosts", "Customer", "External factors"
 ])
 
 
-# ── TAB 1 : LOGEMENTS ──────────────────────────────────────────
+# ─────────────────────────────────────────────
+# TAB 1 - MARKET STRUCTURE
+# ─────────────────────────────────────────────
 with tab1:
-    st.subheader("Analyse des logements")
+    st.subheader("Market structure & pricing behaviour")
+
+    df_market = run_query(f"""
+    SELECT
+        room_type,
+        COUNT(*) AS listings,
+        ROUND(AVG(price),2) AS avg_price,
+        ROUND(AVG(total_reviews),1) AS avg_reviews
+    FROM gold_listings
+    WHERE room_type IN ({rooms_sql})
+    AND price BETWEEN {price_range[0]} AND {price_range[1]}
+    {superhost_sql}
+    GROUP BY room_type
+    ORDER BY listings DESC
+    """)
 
     col1, col2 = st.columns(2)
 
-    # Distribution par type de logement
-    df_room = query(f"""
-        SELECT room_type,
-               COUNT(*) AS nb_listings,
-               ROUND(AVG(price), 2) AS avg_price
-        FROM gold_listings
-        WHERE room_type IN ({rooms_sql})
-          AND price BETWEEN {price_range[0]} AND {price_range[1]}
-          {superhost_sql}
-        GROUP BY room_type
-        ORDER BY nb_listings DESC
-    """)
-    fig1 = px.pie(df_room, names="room_type", values="nb_listings",
-                  title="Répartition par type de logement",
-                  color_discrete_sequence=px.colors.qualitative.Set2)
+    fig1 = px.pie(df_market, names="room_type", values="listings")
     col1.plotly_chart(fig1, use_container_width=True)
 
-    # Prix moyen par type
-    fig2 = px.bar(df_room, x="room_type", y="avg_price",
-                  title="Prix moyen par nuit selon le type",
-                  labels={"avg_price": "Prix moyen (€)", "room_type": "Type"},
-                  color="room_type",
-                  color_discrete_sequence=px.colors.qualitative.Set2)
+    fig2 = px.bar(df_market, x="room_type", y="avg_price")
     col2.plotly_chart(fig2, use_container_width=True)
 
-    # Distribution des prix (histogramme)
-    df_prices = query(f"""
-        SELECT price FROM gold_listings
-        WHERE room_type IN ({rooms_sql})
-          AND price BETWEEN {price_range[0]} AND {price_range[1]}
-          {superhost_sql}
-    """)
-    fig3 = px.histogram(df_prices, x="price", nbins=50,
-                        title="Distribution des prix par nuit",
-                        labels={"price": "Prix (€)", "count": "Nb logements"},
-                        color_discrete_sequence=["#FF5A5F"])
-    st.plotly_chart(fig3, use_container_width=True)
-
-    # Top 10 logements par nombre d'avis
-    df_top = query(f"""
-        SELECT listing_name, room_type, price, total_reviews, positive_rate_pct
-        FROM gold_listings
-        WHERE room_type IN ({rooms_sql})
-          AND price BETWEEN {price_range[0]} AND {price_range[1]}
-          {superhost_sql}
-        ORDER BY total_reviews DESC
-        LIMIT 10
-    """)
-    st.markdown("#### 🏆 Top 10 logements les plus commentés")
-    st.dataframe(df_top, use_container_width=True, hide_index=True)
+    st.dataframe(df_market, use_container_width=True)
 
 
-# ── TAB 2 : HÔTES ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# TAB 2 - HOST ANALYSIS
+# ─────────────────────────────────────────────
 with tab2:
-    st.subheader("Analyse des hôtes")
+    st.subheader("Host performance segmentation")
+
+    df_hosts = run_query("""
+    SELECT
+        is_superhost,
+        COUNT(DISTINCT host_id) AS hosts,
+        ROUND(AVG(nb_listings),1) AS avg_portfolio_size,
+        ROUND(AVG(positive_rate_pct),1) AS satisfaction,
+        ROUND(AVG(avg_price),2) AS avg_price
+    FROM gold_hosts
+    GROUP BY is_superhost
+    """)
+
+    df_hosts["segment"] = df_hosts["is_superhost"].fillna(False).map(
+    lambda x: "Superhost" if x else "Standard"
+)
 
     col1, col2 = st.columns(2)
 
-    # Superhost vs non-superhost
-    df_super = query("""
-        SELECT is_superhost,
-               COUNT(*) AS nb_hosts,
-               ROUND(AVG(positive_rate_pct), 1) AS avg_positive_rate,
-               ROUND(AVG(avg_price), 2) AS avg_price,
-               SUM(nb_listings) AS total_listings
-        FROM gold_hosts
-        GROUP BY is_superhost
+    fig3 = px.bar(df_hosts, x="segment", y="satisfaction")
+    col1.plotly_chart(fig3, use_container_width=True)
+
+    fig4 = px.bar(df_hosts, x="segment", y="avg_portfolio_size")
+    col2.plotly_chart(fig4, use_container_width=True)
+
+    st.dataframe(df_hosts, use_container_width=True)
+
+
+# ─────────────────────────────────────────────
+# TAB 3 - CUSTOMER EXPERIENCE
+# ─────────────────────────────────────────────
+with tab3:
+    st.subheader("Customer experience analysis")
+
+    df_sent = run_query("""
+    SELECT
+        sentiment,
+        SUM(nb_reviews) AS reviews,
+        ROUND(SUM(nb_reviews)*100.0 / SUM(SUM(nb_reviews)) OVER (),1) AS share
+    FROM gold_reviews
+    GROUP BY sentiment
     """)
-    df_super["label"] = df_super["is_superhost"].map({True: "Superhost", False: "Hôte standard"})
 
-    fig4 = px.bar(df_super, x="label", y="avg_positive_rate",
-                  title="Taux d'avis positifs : Superhost vs Standard",
-                  labels={"avg_positive_rate": "Taux positif (%)", "label": ""},
-                  color="label",
-                  color_discrete_map={"Superhost": "#FF5A5F", "Hôte standard": "#767676"})
-    col1.plotly_chart(fig4, use_container_width=True)
+    fig5 = px.pie(df_sent, names="sentiment", values="reviews")
+    st.plotly_chart(fig5, use_container_width=True)
 
-    fig5 = px.bar(df_super, x="label", y="avg_price",
-                  title="Prix moyen selon le statut",
-                  labels={"avg_price": "Prix moyen (€)", "label": ""},
-                  color="label",
-                  color_discrete_map={"Superhost": "#FF5A5F", "Hôte standard": "#767676"})
-    col2.plotly_chart(fig5, use_container_width=True)
+    st.dataframe(df_sent, use_container_width=True)
 
-    # Distribution du nombre de logements par hôte
-    df_nb = query("""
-        SELECT nb_listings, COUNT(*) AS nb_hosts
-        FROM gold_hosts
-        WHERE nb_listings > 0
-        GROUP BY nb_listings
-        ORDER BY nb_listings
+
+# ─────────────────────────────────────────────
+# TAB 4 - EXTERNAL FACTORS
+# ─────────────────────────────────────────────
+with tab4:
+    st.subheader("External signal analysis")
+
+    st.info("Testing whether external cycles influence customer perception")
+
+    df_moon = run_query("""
+    SELECT
+        CASE WHEN is_near_full_moon THEN 'Full moon' ELSE 'Normal' END AS period,
+        sentiment,
+        pct_within_period
+    FROM gold_full_moon_dates
     """)
-    fig6 = px.bar(df_nb[df_nb["nb_listings"] <= 10], x="nb_listings", y="nb_hosts",
-                  title="Distribution du nombre de logements par hôte (≤ 10)",
-                  labels={"nb_listings": "Nombre de logements", "nb_hosts": "Nombre d'hôtes"},
-                  color_discrete_sequence=["#00A699"])
+
+    fig6 = px.bar(
+        df_moon,
+        x="period",
+        y="pct_within_period",
+        color="sentiment",
+        barmode="group"
+    )
+
     st.plotly_chart(fig6, use_container_width=True)
 
-    # Top 10 hôtes
-    df_top_hosts = query("""
-        SELECT host_name,
-               CASE WHEN is_superhost THEN '⭐ Oui' ELSE 'Non' END AS superhost,
-               nb_listings,
-               ROUND(avg_price, 0) AS avg_price,
-               total_reviews,
-               positive_rate_pct
-        FROM gold_hosts
-        ORDER BY total_reviews DESC
-        LIMIT 10
-    """)
-    st.markdown("#### 🏆 Top 10 hôtes les plus commentés")
-    st.dataframe(df_top_hosts, use_container_width=True, hide_index=True)
+    st.dataframe(df_moon, use_container_width=True)
 
-
-# ── TAB 3 : AVIS ──────────────────────────────────────────────
-with tab3:
-    st.subheader("Analyse des avis clients")
-
-    col1, col2 = st.columns(2)
-
-    # Sentiment global (donut)
-    df_sent_global = query("""
-        SELECT sentiment,
-               SUM(nb_reviews) AS nb_reviews
-        FROM gold_reviews
-        GROUP BY sentiment
-    """)
-    color_map = {"positive": "#00A699", "neutral": "#FFB400", "negative": "#FF5A5F"}
-    fig7 = px.pie(df_sent_global, names="sentiment", values="nb_reviews",
-                  title="Distribution globale des sentiments",
-                  hole=0.4,
-                  color="sentiment",
-                  color_discrete_map=color_map)
-    col1.plotly_chart(fig7, use_container_width=True)
-
-    # Sentiment par type de logement (barres empilées)
-    df_sent_room = query("""
-        SELECT room_type, sentiment, pct_of_room_type
-        FROM gold_reviews
-        ORDER BY room_type, sentiment
-    """)
-    fig8 = px.bar(df_sent_room, x="room_type", y="pct_of_room_type",
-                  color="sentiment",
-                  title="Répartition des sentiments par type de logement (%)",
-                  labels={"pct_of_room_type": "Part (%)", "room_type": "Type"},
-                  color_discrete_map=color_map,
-                  barmode="stack")
-    col2.plotly_chart(fig8, use_container_width=True)
-
-    # Tableau récapitulatif
-    st.markdown("#### Détail par type de logement")
-    df_detail = query("""
-        SELECT room_type, sentiment, nb_reviews, pct_of_room_type
-        FROM gold_reviews
-        ORDER BY room_type, nb_reviews DESC
-    """)
-    st.dataframe(df_detail, use_container_width=True, hide_index=True)
-
-
-# ── TAB 4 : PLEINE LUNE ───────────────────────────────────────
-with tab4:
-    st.subheader("🌕 Impact des nuits de pleine lune sur les avis")
-    st.info(
-        "On considère qu'un avis est 'proche d'une pleine lune' "
-        "s'il a été posté dans une fenêtre de ±3 jours autour d'une date de pleine lune."
-    )
-
-    df_moon = query("""
-        SELECT
-            CASE WHEN is_near_full_moon THEN '🌕 Pleine lune (±3j)' ELSE '🌑 Période normale' END AS periode,
-            sentiment,
-            nb_reviews,
-            pct_within_period
-        FROM gold_full_moon_dates
-        ORDER BY periode, nb_reviews DESC
-    """)
-
-    col1, col2 = st.columns(2)
-
-    # Barres groupées
-    fig9 = px.bar(df_moon, x="periode", y="pct_within_period",
-                  color="sentiment",
-                  title="Répartition des sentiments : pleine lune vs période normale",
-                  labels={"pct_within_period": "Part (%)", "periode": ""},
-                  color_discrete_map={"positive": "#00A699", "neutral": "#FFB400", "negative": "#FF5A5F"},
-                  barmode="group",
-                  text="pct_within_period")
-    fig9.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-    col1.plotly_chart(fig9, use_container_width=True)
-
-    # Radar chart pour comparer les deux périodes
-    df_radar = df_moon.pivot(index="sentiment", columns="periode", values="pct_within_period").reset_index()
-    cols_radar = [c for c in df_radar.columns if c != "sentiment"]
-    fig10 = go.Figure()
-    for col in cols_radar:
-        fig10.add_trace(go.Scatterpolar(
-            r=df_radar[col],
-            theta=df_radar["sentiment"],
-            fill="toself",
-            name=col
-        ))
-    fig10.update_layout(
-        polar=dict(radialaxis=dict(visible=True)),
-        title="Comparaison radar : pleine lune vs normale",
-        showlegend=True
-    )
-    col2.plotly_chart(fig10, use_container_width=True)
-
-    # Tableau récap
-    st.markdown("#### Détail chiffré")
-    st.dataframe(df_moon, use_container_width=True, hide_index=True)
-
-    # Analyse textuelle automatique
-    try:
-        moon_pos = df_moon[(df_moon["periode"].str.contains("Pleine")) & (df_moon["sentiment"] == "positive")]["pct_within_period"].values[0]
-        norm_pos = df_moon[(df_moon["periode"].str.contains("normale")) & (df_moon["sentiment"] == "positive")]["pct_within_period"].values[0]
-        diff = round(moon_pos - norm_pos, 1)
-        emoji = "📈" if diff > 0 else "📉"
-        st.markdown(f"""
-        **Analyse automatique :**  
-        Pendant les périodes de pleine lune, le taux d'avis positifs est de **{moon_pos:.1f}%**  
-        contre **{norm_pos:.1f}%** en période normale.  
-        {emoji} Différence : **{diff:+.1f} points**.
-        """)
-    except Exception:
-        pass
 
 st.divider()
-st.caption("Airbnb Analytics Platform - Projet MBA ESG 2026 | Données Berlin Airbnb")
+st.caption("Airbnb Market Intelligence - MBA Data Project 2026")
