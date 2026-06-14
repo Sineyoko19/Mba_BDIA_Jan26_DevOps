@@ -39,4 +39,4 @@ LEFT JOIN {{ ref('silver_reviews') }} r
 GROUP BY
     h.host_id,
     h.host_name,
-    h.is_superhost;
+    h.is_superhost

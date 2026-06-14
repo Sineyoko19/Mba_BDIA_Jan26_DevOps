@@ -21,4 +21,4 @@ GROUP BY
 
 ORDER BY
     l.room_type,
-    nb_reviews DESC;
+    nb_reviews DESC
