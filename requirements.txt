@@ -1,0 +1,7 @@
+duckdb
+pandas
+numpy
+streamlit
+plotly
+dbt-core
+dbt-duckdb
