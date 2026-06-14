@@ -12,7 +12,7 @@ WITH base_reviews AS (
 moon_flag AS (
     SELECT
         br.*,
-        CASE 
+        CASE
             WHEN fm.full_moon_date IS NOT NULL THEN 1
             ELSE 0
         END AS is_near_full_moon

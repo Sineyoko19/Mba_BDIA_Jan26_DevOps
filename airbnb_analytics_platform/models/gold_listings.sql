@@ -17,7 +17,6 @@ SELECT
         / NULLIF(COUNT(r.reviewer_name), 0),
     1) AS satisfaction_rate_pct,
 
-    -- 🔥 KPI métier important
     ROUND(
         l.price / NULLIF(COUNT(r.reviewer_name), 1),
     2) AS price_per_review

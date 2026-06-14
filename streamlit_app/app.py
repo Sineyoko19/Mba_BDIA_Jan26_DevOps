@@ -3,6 +3,7 @@ import duckdb
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import math
 from pathlib import Path
 
 # ─────────────────────────────────────────────
@@ -21,8 +22,18 @@ def get_conn():
     return duckdb.connect(str(DB_PATH), read_only=True)
 
 def run_query(sql: str) -> pd.DataFrame:
-    conn = get_conn()
-    return conn.execute(sql).fetchdf()
+    try:
+        conn = get_conn()
+        return conn.execute(sql).fetchdf()
+    except Exception as e:
+        st.error(f"Erreur SQL : {e}")
+        st.stop()
+
+def safe_int(val):
+    return 0 if val is None or (isinstance(val, float) and math.isnan(val)) else int(val)
+
+def safe_float(val):
+    return 0.0 if val is None or (isinstance(val, float) and math.isnan(val)) else float(val)
 
 
 # ─────────────────────────────────────────────
@@ -37,6 +48,11 @@ st.sidebar.title("Filters")
 
 room_types = run_query("SELECT DISTINCT room_type FROM gold_listings ORDER BY 1")["room_type"].tolist()
 selected_rooms = st.sidebar.multiselect("Room type", room_types, default=room_types)
+
+# ✅ Guard : évite le crash si aucun room type sélectionné
+if not selected_rooms:
+    st.warning("Veuillez sélectionner au moins un type de logement.")
+    st.stop()
 
 price_min, price_max = run_query("SELECT MIN(price), MAX(price) FROM gold_listings").values[0]
 price_range = st.sidebar.slider(
@@ -66,15 +82,17 @@ st.divider()
 
 
 # ─────────────────────────────────────────────
-# KPI SECTION (BUSINESS ORIENTED)
+# KPI SECTION
 # ─────────────────────────────────────────────
 kpi = run_query(f"""
 SELECT
     COUNT(DISTINCT listing_id) AS listings,
     ROUND(AVG(price),2) AS avg_price,
     SUM(total_reviews) AS reviews,
-    ROUND(AVG(positive_rate_pct),1) AS satisfaction,
-    ROUND(AVG(price / NULLIF(total_reviews,0)),2) AS price_efficiency
+    ROUND(
+        SUM(positive_reviews) * 100.0 / NULLIF(SUM(total_reviews), 0)
+    , 1) AS satisfaction,
+    ROUND(AVG(price_per_review), 2) AS price_efficiency
 FROM gold_listings
 WHERE room_type IN ({rooms_sql})
 AND price BETWEEN {price_range[0]} AND {price_range[1]}
@@ -83,11 +101,11 @@ AND price BETWEEN {price_range[0]} AND {price_range[1]}
 
 c1, c2, c3, c4, c5 = st.columns(5)
 
-c1.metric("Listings", int(kpi["listings"][0]))
-c2.metric("Avg price (€)", f"{kpi['avg_price'][0]:.0f}")
-c3.metric("Reviews", int(kpi["reviews"][0]))
-c4.metric("Satisfaction (%)", f"{kpi['satisfaction'][0]:.1f}")
-c5.metric("Price efficiency", f"{kpi['price_efficiency'][0]:.2f}")
+c1.metric("Listings",         safe_int(kpi["listings"][0]))
+c2.metric("Avg price (€)",    f"{safe_float(kpi['avg_price'][0]):.0f}")
+c3.metric("Reviews",          safe_int(kpi["reviews"][0]))
+c4.metric("Satisfaction (%)", f"{safe_float(kpi['satisfaction'][0]):.1f}")
+c5.metric("Price efficiency", f"{safe_float(kpi['price_efficiency'][0]):.2f}")
 
 st.divider()
 
@@ -122,10 +140,12 @@ with tab1:
 
     col1, col2 = st.columns(2)
 
-    fig1 = px.pie(df_market, names="room_type", values="listings")
+    fig1 = px.pie(df_market, names="room_type", values="listings",
+                  title="Listings by room type")
     col1.plotly_chart(fig1, use_container_width=True)
 
-    fig2 = px.bar(df_market, x="room_type", y="avg_price")
+    fig2 = px.bar(df_market, x="room_type", y="avg_price",
+                  title="Average price by room type")
     col2.plotly_chart(fig2, use_container_width=True)
 
     st.dataframe(df_market, use_container_width=True)
@@ -142,22 +162,26 @@ with tab2:
         is_superhost,
         COUNT(DISTINCT host_id) AS hosts,
         ROUND(AVG(nb_listings),1) AS avg_portfolio_size,
-        ROUND(AVG(positive_rate_pct),1) AS satisfaction,
+        ROUND(
+            SUM(positive_reviews) * 100.0 / NULLIF(SUM(total_reviews), 0)
+        , 1) AS satisfaction,
         ROUND(AVG(avg_price),2) AS avg_price
     FROM gold_hosts
     GROUP BY is_superhost
     """)
 
     df_hosts["segment"] = df_hosts["is_superhost"].fillna(False).map(
-    lambda x: "Superhost" if x else "Standard"
-)
+        lambda x: "Superhost" if x else "Standard"
+    )
 
     col1, col2 = st.columns(2)
 
-    fig3 = px.bar(df_hosts, x="segment", y="satisfaction")
+    fig3 = px.bar(df_hosts, x="segment", y="satisfaction",
+                  title="Satisfaction rate by host segment")
     col1.plotly_chart(fig3, use_container_width=True)
 
-    fig4 = px.bar(df_hosts, x="segment", y="avg_portfolio_size")
+    fig4 = px.bar(df_hosts, x="segment", y="avg_portfolio_size",
+                  title="Average portfolio size")
     col2.plotly_chart(fig4, use_container_width=True)
 
     st.dataframe(df_hosts, use_container_width=True)
@@ -178,7 +202,8 @@ with tab3:
     GROUP BY sentiment
     """)
 
-    fig5 = px.pie(df_sent, names="sentiment", values="reviews")
+    fig5 = px.pie(df_sent, names="sentiment", values="reviews",
+                  title="Reviews by sentiment")
     st.plotly_chart(fig5, use_container_width=True)
 
     st.dataframe(df_sent, use_container_width=True)
@@ -194,18 +219,19 @@ with tab4:
 
     df_moon = run_query("""
     SELECT
-        CASE WHEN is_near_full_moon THEN 'Full moon' ELSE 'Normal' END AS period,
+        CASE WHEN is_near_full_moon = 1 THEN 'Full moon' ELSE 'Normal' END AS period,
         sentiment,
-        pct_within_period
+        sentiment_share_pct
     FROM gold_full_moon_dates
     """)
 
     fig6 = px.bar(
         df_moon,
         x="period",
-        y="pct_within_period",
+        y="sentiment_share_pct",
         color="sentiment",
-        barmode="group"
+        barmode="group",
+        title="Sentiment distribution: Full moon vs Normal periods"
     )
 
     st.plotly_chart(fig6, use_container_width=True)

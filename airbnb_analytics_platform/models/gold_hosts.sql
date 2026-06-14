@@ -17,16 +17,14 @@ SELECT
         / NULLIF(COUNT(r.reviewer_name), 0),
     1) AS satisfaction_rate_pct,
 
-    -- 🔥 KPI métier (différenciation)
     ROUND(
         COUNT(r.reviewer_name)::FLOAT
         / NULLIF(COUNT(DISTINCT l.listing_id), 0),
     2) AS engagement_per_listing,
 
-    -- 🔥 KPI efficacité
     ROUND(
-        AVG(l.price) * 
-        (SUM(CASE WHEN r.sentiment = 'positive' THEN 1 ELSE 0 END)::FLOAT 
+        AVG(l.price) *
+        (SUM(CASE WHEN r.sentiment = 'positive' THEN 1 ELSE 0 END)::FLOAT
         / NULLIF(COUNT(r.reviewer_name), 1)),
     2) AS performance_index
 
