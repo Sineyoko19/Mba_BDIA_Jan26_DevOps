@@ -4,71 +4,95 @@ models:
 
   - name: gold_listings_analytics
     description: >
-      Table Gold enrichissant chaque logement avec les statistiques d'avis
-      et les informations de l'hôte associé.
+      Analyse détaillée des logements Airbnb incluant performance, prix et qualité perçue via les avis clients.
+      Ce modèle sert à identifier les logements les plus performants en combinant métriques financières et satisfaction client.
     columns:
       - name: listing_id
         description: Identifiant unique du logement
         tests:
           - not_null
           - unique
+
       - name: room_type
-        description: Type de logement (Entire home/apt, Private room, etc.)
+        description: Catégorie du logement (entire home, private room, shared room)
         tests:
           - not_null
+
       - name: price
-        description: Prix par nuit en euros
+        description: Prix moyen par nuit en euros
         tests:
           - not_null
+
       - name: positive_rate_pct
-        description: Pourcentage d'avis positifs (0-100)
+        description: Indicateur de satisfaction client basé sur la proportion d'avis positifs (0-100)
+
+      - name: price_per_review
+        description: KPI de rentabilité implicite du logement (prix rapporté à l’engagement client)
 
   - name: gold_hosts_performance
     description: >
-      Vue agrégée par hôte avec nombre de logements, prix moyens
-      et indicateurs de satisfaction client.
+      Analyse de la performance des hôtes Airbnb basée sur leur portefeuille de logements et la satisfaction client générée.
+      Permet d’identifier les hôtes les plus efficaces et ceux ayant un modèle plus professionnel ou individuel.
     columns:
       - name: host_id
         description: Identifiant unique de l'hôte
         tests:
           - not_null
           - unique
+
       - name: is_superhost
-        description: Statut superhost (true/false)
+        description: Indique si l'hôte possède le statut Superhost Airbnb
         tests:
           - not_null
+
       - name: nb_listings
-        description: Nombre de logements actifs de l'hôte
+        description: Nombre total de logements gérés par l'hôte
         tests:
           - not_null
+
+      - name: engagement_per_listing
+        description: Niveau d’engagement moyen généré par logement (nombre de reviews / listing)
+
+      - name: performance_index
+        description: Indicateur composite de performance combinant prix et satisfaction client
 
   - name: gold_reviews_summary
     description: >
-      Distribution des sentiments des avis par type de logement.
+      Analyse de la distribution des sentiments des avis clients selon le type de logement.
+      Permet d’identifier les segments de marché les plus appréciés ou les plus critiqués.
     columns:
       - name: room_type
-        description: Type de logement
+        description: Type de logement proposé sur la plateforme
         tests:
           - not_null
+
       - name: sentiment
-        description: Sentiment de l'avis (positive, negative, neutral)
+        description: Classification du sentiment exprimé dans les avis clients
         tests:
           - not_null
           - accepted_values:
               values: ['positive', 'negative', 'neutral']
 
+      - name: sentiment_share_pct
+        description: Part relative des sentiments au sein de chaque type de logement
+
   - name: gold_full_moon_impact
     description: >
-      Comparaison des sentiments d'avis entre les périodes de pleine lune
-      (±3 jours) et les périodes normales.
+      Analyse exploratoire visant à tester une hypothèse externe :
+      l’impact potentiel des cycles lunaires sur la perception des logements Airbnb.
+      Ce modèle a un caractère expérimental et statistique.
     columns:
       - name: is_near_full_moon
-        description: TRUE si l'avis est dans une fenêtre de ±3 jours autour d'une pleine lune
+        description: Indicateur binaire signalant une période proche d'une pleine lune (±3 jours)
         tests:
           - not_null
+
       - name: sentiment
-        description: Sentiment de l'avis
+        description: Sentiment exprimé dans l'avis client
         tests:
           - not_null
           - accepted_values:
               values: ['positive', 'negative', 'neutral']
+
+      - name: sentiment_share_pct
+        description: Répartition des sentiments selon la période lunaire
