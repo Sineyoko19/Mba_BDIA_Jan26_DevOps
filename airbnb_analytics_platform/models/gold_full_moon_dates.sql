@@ -35,4 +35,4 @@ SELECT
 FROM moon_flag
 
 GROUP BY is_near_full_moon, sentiment
-ORDER BY is_near_full_moon, nb_reviews DESC;
+ORDER BY is_near_full_moon, nb_reviews DESC

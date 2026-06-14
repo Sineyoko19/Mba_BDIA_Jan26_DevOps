@@ -35,4 +35,4 @@ GROUP BY
     l.price,
     l.host_id,
     h.host_name,
-    h.is_superhost;
+    h.is_superhost
