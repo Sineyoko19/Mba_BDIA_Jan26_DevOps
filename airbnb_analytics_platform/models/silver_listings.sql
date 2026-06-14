@@ -9,6 +9,6 @@ select
     created_at,
     updated_at
 from {{ ref('listings') }}
-where listing_id is not null
+where TRY_CAST(listing_id AS bigint) IS NOT NULL
     and price is not null
     and minimum_nights > 0
