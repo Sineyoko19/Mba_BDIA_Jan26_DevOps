@@ -92,7 +92,7 @@ SELECT
     ROUND(
         SUM(positive_reviews) * 100.0 / NULLIF(SUM(total_reviews), 0)
     , 1) AS satisfaction,
-    ROUND(AVG(price_per_review), 2) AS price_efficiency
+   ROUND(AVG(price) * AVG(total_reviews), 2) AS revenue_potential
 FROM gold_listings
 WHERE room_type IN ({rooms_sql})
 AND price BETWEEN {price_range[0]} AND {price_range[1]}
@@ -105,7 +105,7 @@ c1.metric("Listings",         safe_int(kpi["listings"][0]))
 c2.metric("Avg price (€)",    f"{safe_float(kpi['avg_price'][0]):.0f}")
 c3.metric("Reviews",          safe_int(kpi["reviews"][0]))
 c4.metric("Satisfaction (%)", f"{safe_float(kpi['satisfaction'][0]):.1f}")
-c5.metric("Price efficiency", f"{safe_float(kpi['price_efficiency'][0]):.2f}")
+c5.metric("Potential revenue (€)", f"{safe_float(kpi['revenue_potential'][0]):.2f}")
 
 st.divider()
 
